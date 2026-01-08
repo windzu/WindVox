@@ -1,0 +1,25 @@
+# WindVox 配置文件
+# 复制此文件到 ~/.config/windvox/config.yaml 并填写你的凭证
+
+# 火山引擎凭证
+volcengine:
+  app_key: "YOUR_APP_ID"           # 例如: 2034765041
+  access_key: "YOUR_ACCESS_TOKEN"  # 例如: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+  resource_id: "volc.seedasr.sauc.duration"
+  ws_url: "wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async"
+
+# 交互设置
+interaction:
+  trigger_key: "f2"           # 触发键
+  mode: "push_to_talk"        # push_to_talk (按住说话) | toggle (按一下开始/结束)
+
+# 音频设置
+audio:
+  device_index: null          # null = 使用默认麦克风
+  sample_rate: 16000          # 采样率 (不要修改)
+  channels: 1                 # 声道数 (不要修改)
+  chunk_duration_ms: 200      # 音频块时长（推荐 200ms）
+
+# 输入模拟
+input:
+  typing_delay_ms: 10         # 按键间隔（毫秒）
