@@ -45,27 +45,16 @@ check_dependencies() {
         missing+=("python3-venv")
     fi
     
-    if ! dpkg -s gir1.2-ayatanaappindicator3-0.1 &>/dev/null 2>&1; then
-        # Try alternative package name
-        if ! dpkg -s gir1.2-appindicator3-0.1 &>/dev/null 2>&1; then
-            missing+=("gir1.2-ayatanaappindicator3-0.1")
-        fi
-    fi
-    
-    if ! dpkg -s libgirepository1.0-dev &>/dev/null; then
-        missing+=("libgirepository1.0-dev")
-    fi
-    
-    if ! dpkg -s pkg-config &>/dev/null; then
-        missing+=("pkg-config")
-    fi
-    
-    if ! dpkg -s libcairo2-dev &>/dev/null; then
-        missing+=("libcairo2-dev")
+    if ! dpkg -s python3-tk &>/dev/null; then
+        missing+=("python3-tk")
     fi
     
     if ! command -v xdotool &>/dev/null; then
         missing+=("xdotool")
+    fi
+    
+    if ! command -v xclip &>/dev/null; then
+        missing+=("xclip")
     fi
     
     if [ ${#missing[@]} -ne 0 ]; then

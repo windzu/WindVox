@@ -1,171 +1,93 @@
-"""Keyboard input simulation module."""
+"""Simple keyboard input using shell commands."""
 
-import asyncio
-import logging
-import shutil
 import subprocess
-import time
+import logging
 from typing import Optional
 
 logger = logging.getLogger(__name__)
 
 
+class WindowManager:
+    """Manages window focus."""
+    
+    def __init__(self):
+        self._saved_window_id: Optional[str] = None
+    
+    def save_active_window(self) -> bool:
+        """Save the currently active window ID."""
+        try:
+            result = subprocess.run(
+                ["xdotool", "getactivewindow"],
+                capture_output=True, text=True, timeout=2
+            )
+            if result.returncode == 0:
+                self._saved_window_id = result.stdout.strip()
+                logger.debug(f"Saved window: {self._saved_window_id}")
+                return True
+        except Exception as e:
+            logger.warning(f"Failed to save window: {e}")
+        return False
+    
+    def restore_active_window(self) -> bool:
+        """Restore focus to the saved window."""
+        if not self._saved_window_id:
+            return False
+        try:
+            subprocess.run(
+                ["xdotool", "windowactivate", "--sync", self._saved_window_id],
+                timeout=2
+            )
+            return True
+        except Exception as e:
+            logger.warning(f"Failed to restore window: {e}")
+        return False
+    
+    def clear_saved_window(self) -> None:
+        """Clear saved window."""
+        self._saved_window_id = None
+
+
 class InputSimulator:
-    """Simulates keyboard input to type text."""
+    """Simple text input using xclip + xdotool."""
     
     def __init__(self, delay_ms: int = 10):
-        """Initialize input simulator.
-        
-        Args:
-            delay_ms: Delay between keystrokes in milliseconds.
-        """
         self.delay_ms = delay_ms
-        self._use_xdotool = shutil.which("xdotool") is not None
-        
-        if self._use_xdotool:
-            logger.debug("Using xdotool for input simulation")
-        else:
-            logger.debug("Using pynput for input simulation")
-            from pynput import keyboard as kb
-            self._controller = kb.Controller()
+        self.window_manager = WindowManager()
     
-    def type_text(self, text: str) -> None:
-        """Type text by simulating keyboard input.
+    def type_text(self, text: str, restore_focus: bool = True) -> None:
+        """Type text using clipboard paste.
         
-        Args:
-            text: Text to type (supports Unicode/Chinese).
+        Uses the exact same method as the verified shell command:
+        echo "text" | xclip -selection clipboard && xdotool key ctrl+v
         """
         if not text:
             return
         
-        logger.info(f"Typing text: {text[:50]}...")
+        logger.info(f"Pasting: {text[:50]}...")
         
-        if self._use_xdotool:
-            self._type_with_xdotool(text)
-        else:
-            self._type_with_pynput(text)
+        # Restore focus first
+        if restore_focus:
+            self.window_manager.restore_active_window()
         
-        logger.info("Text input complete")
-    
-    def _type_with_xdotool(self, text: str) -> None:
-        """Type text using xdotool (more reliable for Unicode)."""
         try:
-            # xdotool type handles Unicode well
-            # Add delay between characters for reliability
-            subprocess.run(
-                ["xdotool", "type", "--delay", str(self.delay_ms), "--", text],
-                check=True,
-                timeout=30
+            # Copy to clipboard (same as: echo "text" | xclip -selection clipboard)
+            proc = subprocess.Popen(
+                ["xclip", "-selection", "clipboard"],
+                stdin=subprocess.PIPE
             )
-        except subprocess.CalledProcessError as e:
-            logger.error(f"xdotool type failed: {e}")
-        except subprocess.TimeoutExpired:
-            logger.error("xdotool type timed out")
+            proc.communicate(input=text.encode('utf-8'), timeout=5)
+            
+            # Paste (same as: xdotool key ctrl+v)
+            subprocess.run(
+                ["xdotool", "key", "ctrl+v"],
+                timeout=5
+            )
+            
+            logger.info("Paste complete")
+            
+        except Exception as e:
+            logger.error(f"Paste failed: {e}")
     
-    def _type_with_pynput(self, text: str) -> None:
-        """Type text using pynput."""
-        from pynput import keyboard as kb
-        
-        delay_sec = self.delay_ms / 1000.0
-        controller = getattr(self, '_controller', kb.Controller())
-        
-        for char in text:
-            try:
-                controller.type(char)
-                if delay_sec > 0:
-                    time.sleep(delay_sec)
-            except Exception as e:
-                logger.warning(f"Failed to type character '{char}': {e}")
-    
-    async def type_text_async(self, text: str) -> None:
-        """Async version of type_text.
-        
-        Args:
-            text: Text to type.
-        """
-        if not text:
-            return
-        
-        logger.info(f"Typing text (async): {text[:50]}...")
-        
-        if self._use_xdotool:
-            # Run xdotool in executor to not block event loop
-            loop = asyncio.get_event_loop()
-            await loop.run_in_executor(None, self._type_with_xdotool, text)
-        else:
-            await self._type_with_pynput_async(text)
-        
-        logger.info("Text input complete")
-    
-    async def _type_with_pynput_async(self, text: str) -> None:
-        """Type text using pynput (async)."""
-        from pynput import keyboard as kb
-        
-        delay_sec = self.delay_ms / 1000.0
-        controller = getattr(self, '_controller', kb.Controller())
-        
-        for char in text:
-            try:
-                controller.type(char)
-                if delay_sec > 0:
-                    await asyncio.sleep(delay_sec)
-            except Exception as e:
-                logger.warning(f"Failed to type character '{char}': {e}")
-    
-    def press_key(self, key: str) -> None:
-        """Press a single key.
-        
-        Args:
-            key: Key to press (e.g., "enter", "tab", "a").
-        """
-        if self._use_xdotool:
-            try:
-                subprocess.run(["xdotool", "key", key], check=True, timeout=5)
-            except Exception as e:
-                logger.warning(f"Failed to press key '{key}': {e}")
-        else:
-            from pynput import keyboard as kb
-            try:
-                if hasattr(kb.Key, key.lower()):
-                    self._controller.press(getattr(kb.Key, key.lower()))
-                    self._controller.release(getattr(kb.Key, key.lower()))
-                else:
-                    self._controller.press(key)
-                    self._controller.release(key)
-            except Exception as e:
-                logger.warning(f"Failed to press key '{key}': {e}")
-    
-    def press_combo(self, *keys: str) -> None:
-        """Press a key combination.
-        
-        Args:
-            keys: Keys to press together (e.g., "ctrl", "v").
-        """
-        if self._use_xdotool:
-            try:
-                combo = "+".join(keys)
-                subprocess.run(["xdotool", "key", combo], check=True, timeout=5)
-            except Exception as e:
-                logger.warning(f"Failed to press combo {keys}: {e}")
-        else:
-            from pynput import keyboard as kb
-            pressed = []
-            try:
-                for key in keys:
-                    if hasattr(kb.Key, key.lower()):
-                        k = getattr(kb.Key, key.lower())
-                    else:
-                        k = key
-                    self._controller.press(k)
-                    pressed.append(k)
-                
-                for k in reversed(pressed):
-                    self._controller.release(k)
-                    
-            except Exception as e:
-                logger.warning(f"Failed to press combo {keys}: {e}")
-                for k in pressed:
-                    try:
-                        self._controller.release(k)
-                    except:
-                        pass
+    async def type_text_async(self, text: str, restore_focus: bool = True) -> None:
+        """Async wrapper - just calls sync version directly."""
+        self.type_text(text, restore_focus)

@@ -10,6 +10,19 @@
 - 🔧 **后台服务**: 作为 systemd 用户服务运行，开机自启
 - 🈶 **中文支持**: 完美支持中文输入
 
+## 📸 效果展示
+
+### 实时悬浮窗 && 录音状态指示
+说话时，屏幕下方显示实时识别结果，系统托盘图标显示当前状态：
+
+![悬浮窗展示](docs/images/overlay.png)
+
+
+### 长文本输入
+得益于豆包流式语音识别 2.0 强大的语音识别能力，支持连续长句输入：
+
+![长文本输入](docs/images/long-text.png)
+
 ## 📋 系统要求
 
 - Ubuntu 22.04 / 24.04 LTS (或其他 Debian 系发行版)
@@ -27,11 +40,9 @@ sudo apt install -y \
     portaudio19-dev \
     python3-dev \
     python3-venv \
+    python3-tk \
     xdotool \
-    gir1.2-ayatanaappindicator3-0.1 \
-    libgirepository1.0-dev \
-    pkg-config \
-    libcairo2-dev
+    xclip
 ```
 
 ### 2. 运行安装脚本
