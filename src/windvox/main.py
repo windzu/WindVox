@@ -14,6 +14,7 @@ from .audio import AudioCapture
 from .config import Config, get_config_path, load_config
 from .hotkey import HotkeyManager
 from .input import InputSimulator
+from .overlay import OverlayWindow, TK_AVAILABLE
 from .tray import TrayIcon, TrayState
 
 logger = logging.getLogger(__name__)
@@ -70,7 +71,16 @@ class WindVoxService:
         # Wire up callbacks
         self._hotkey.on_record_start(self._on_record_start)
         self._hotkey.on_record_stop(self._on_record_stop)
+        
+        # Set up ASR callbacks for real-time display
+        self._asr.on_partial_result(self._on_partial_result)
+        self._asr.on_final_result(self._on_final_result)
         self._tray.on_quit(self._on_quit)
+        
+        # Overlay window for real-time feedback
+        self._overlay: Optional[OverlayWindow] = None
+        if TK_AVAILABLE:
+            self._overlay = OverlayWindow()
         
         # Audio streaming task
         self._stream_task: Optional[asyncio.Task] = None
@@ -115,6 +125,15 @@ class WindVoxService:
         if self._loop:
             self._loop.call_soon_threadsafe(self._loop.stop)
     
+    def _on_partial_result(self, text: str) -> None:
+        """Handle partial ASR result - update overlay display."""
+        if self._overlay and self._state == ServiceState.RECORDING:
+            self._overlay.update_text(text)
+    
+    def _on_final_result(self, text: str) -> None:
+        """Handle final ASR result."""
+        logger.debug(f"Final result callback: {text}")
+    
     async def _start_recording(self) -> None:
         """Start recording and streaming audio."""
         if self._state != ServiceState.IDLE:
@@ -124,9 +143,20 @@ class WindVoxService:
         self._set_state(ServiceState.RECORDING)
         
         try:
+            # Save active window BEFORE showing overlay
+            self._input.window_manager.save_active_window()
+            
+            # Show overlay window for real-time feedback
+            if self._overlay:
+                self._overlay.show()
+                self._overlay.update_text("🎤 正在聆听...")
+            
             # Connect to ASR
             if not await self._asr.connect():
                 logger.error("Failed to connect to ASR")
+                if self._overlay:
+                    self._overlay.hide()
+                self._input.window_manager.clear_saved_window()
                 self._set_state(ServiceState.ERROR)
                 await asyncio.sleep(2)
                 self._set_state(ServiceState.IDLE)
@@ -140,6 +170,9 @@ class WindVoxService:
             
         except Exception as e:
             logger.error(f"Recording start error: {e}")
+            if self._overlay:
+                self._overlay.hide()
+            self._input.window_manager.clear_saved_window()
             self._set_state(ServiceState.ERROR)
             await asyncio.sleep(2)
             self._set_state(ServiceState.IDLE)
@@ -166,6 +199,10 @@ class WindVoxService:
         self._set_state(ServiceState.PROCESSING)
         
         try:
+            # Hide overlay immediately
+            if self._overlay:
+                self._overlay.hide()
+            
             # Stop audio capture
             self._audio.stop()
             
@@ -184,9 +221,9 @@ class WindVoxService:
             # Disconnect ASR
             await self._asr.disconnect()
             
-            # Type the result
+            # Type the final result
             if result:
-                logger.info(f"Recognition result: {result}")
+                logger.info(f"Final result: {result}")
                 await self._input.type_text_async(result)
             else:
                 logger.info("No recognition result")
@@ -196,6 +233,7 @@ class WindVoxService:
             self._set_state(ServiceState.ERROR)
             await asyncio.sleep(2)
         finally:
+            self._input.window_manager.clear_saved_window()
             self._set_state(ServiceState.IDLE)
     
     async def run_async(self) -> None:
@@ -204,6 +242,10 @@ class WindVoxService:
         self._running = True
         
         logger.info("WindVox service starting")
+        
+        # Start overlay window
+        if self._overlay:
+            self._overlay.start()
         
         # Start components
         self._tray.start()
@@ -230,6 +272,9 @@ class WindVoxService:
         
         if self._asr.is_connected:
             await self._asr.disconnect()
+        
+        if self._overlay:
+            self._overlay.stop()
         
         self._tray.stop()
         
