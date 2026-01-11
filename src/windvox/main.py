@@ -15,6 +15,7 @@ from .config import Config, get_config_path, load_config
 from .hotkey import HotkeyManager
 from .input import InputSimulator
 from .overlay import OverlayWindow, TK_AVAILABLE
+from .session import SessionMonitor
 from .tray import TrayIcon, TrayState
 
 logger = logging.getLogger(__name__)
@@ -77,6 +78,11 @@ class WindVoxService:
         self._asr.on_final_result(self._on_final_result)
         self._tray.on_quit(self._on_quit)
         
+        # Session monitor for lock screen detection
+        self._session = SessionMonitor()
+        self._session.on_lock(self._on_session_lock)
+        self._session.on_unlock(self._on_session_unlock)
+        
         # Overlay window for real-time feedback
         self._overlay: Optional[OverlayWindow] = None
         if TK_AVAILABLE:
@@ -124,6 +130,16 @@ class WindVoxService:
         self._running = False
         if self._loop:
             self._loop.call_soon_threadsafe(self._loop.stop)
+    
+    def _on_session_lock(self) -> None:
+        """Handle session lock - pause hotkey listener."""
+        logger.info("Session locked, pausing hotkey listener")
+        self._hotkey.pause()
+    
+    def _on_session_unlock(self) -> None:
+        """Handle session unlock - resume hotkey listener."""
+        logger.info("Session unlocked, resuming hotkey listener")
+        self._hotkey.resume()
     
     def _on_partial_result(self, text: str) -> None:
         """Handle partial ASR result - update overlay display."""
@@ -248,6 +264,7 @@ class WindVoxService:
             self._overlay.start()
         
         # Start components
+        self._session.start()
         self._tray.start()
         self._hotkey.start()
         
@@ -268,6 +285,7 @@ class WindVoxService:
         logger.info("Cleaning up...")
         
         self._hotkey.stop()
+        self._session.stop()
         self._audio.stop()
         
         if self._asr.is_connected:

@@ -49,6 +49,18 @@ check_dependencies() {
         missing+=("python3-tk")
     fi
     
+    # D-Bus and GObject Introspection for session monitoring
+    if ! dpkg -s libdbus-1-dev &>/dev/null; then
+        missing+=("libdbus-1-dev")
+    fi
+    
+    if ! dpkg -s libgirepository-2.0-dev &>/dev/null 2>&1; then
+        # Fallback for older distros
+        if ! dpkg -s libgirepository1.0-dev &>/dev/null 2>&1; then
+            missing+=("libgirepository-2.0-dev")
+        fi
+    fi
+    
     if ! command -v xdotool &>/dev/null; then
         missing+=("xdotool")
     fi
