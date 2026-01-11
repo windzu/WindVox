@@ -127,6 +127,9 @@ install_service() {
     
     mkdir -p "$SERVICE_DIR"
     
+    # Get current DISPLAY for initial setup
+    CURRENT_DISPLAY="${DISPLAY:-:0}"
+    
     # Create service file
     cat > "$SERVICE_DIR/windvox.service" << EOF
 [Unit]
@@ -139,11 +142,11 @@ Type=simple
 ExecStart=$VENV_DIR/bin/windvox
 Restart=on-failure
 RestartSec=3
-Environment=DISPLAY=:0
+Environment=DISPLAY=$CURRENT_DISPLAY
 Environment=XAUTHORITY=%h/.Xauthority
 
 [Install]
-WantedBy=default.target
+WantedBy=graphical-session.target
 EOF
     
     # Reload systemd
