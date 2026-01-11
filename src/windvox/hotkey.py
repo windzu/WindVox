@@ -30,6 +30,7 @@ class HotkeyManager:
         self._running = False
         self._recording = False
         self._key_pressed = False
+        self._paused = False
         
         # Parse trigger key
         self._target_key = self._parse_key(self.trigger_key)
@@ -171,3 +172,40 @@ class HotkeyManager:
     def is_recording(self) -> bool:
         """Check if currently recording."""
         return self._recording
+    
+    def pause(self) -> None:
+        """Pause hotkey listening (for screen lock).
+        
+        This stops the listener to prevent conflicts with X11 during
+        screen lock/unlock transitions. Call resume() after unlock.
+        """
+        if not self._running or self._paused:
+            return
+        
+        logger.info("Pausing hotkey listener")
+        self._paused = True
+        
+        # Stop the current listener
+        if self._listener:
+            self._listener.stop()
+            self._listener = None
+    
+    def resume(self) -> None:
+        """Resume hotkey listening (after screen unlock).
+        
+        Creates a new listener instance since pynput listeners cannot
+        be restarted once stopped.
+        """
+        if not self._running or not self._paused:
+            return
+        
+        logger.info("Resuming hotkey listener")
+        self._paused = False
+        
+        # Create and start new listener
+        self._listener = kb.Listener(
+            on_press=self._on_press,
+            on_release=self._on_release,
+        )
+        self._listener.start()
+
