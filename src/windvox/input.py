@@ -54,16 +54,46 @@ class InputSimulator:
         self.delay_ms = delay_ms
         self.window_manager = WindowManager()
     
+    def _get_clipboard(self) -> Optional[bytes]:
+        """Get current clipboard content."""
+        try:
+            result = subprocess.run(
+                ["xclip", "-selection", "clipboard", "-o"],
+                capture_output=True,
+                timeout=2
+            )
+            if result.returncode == 0:
+                return result.stdout
+        except Exception as e:
+            logger.debug(f"Failed to get clipboard: {e}")
+        return None
+    
+    def _set_clipboard(self, content: bytes) -> None:
+        """Set clipboard content."""
+        try:
+            proc = subprocess.Popen(
+                ["xclip", "-selection", "clipboard"],
+                stdin=subprocess.PIPE
+            )
+            proc.communicate(input=content, timeout=5)
+        except Exception as e:
+            logger.debug(f"Failed to set clipboard: {e}")
+    
     def type_text(self, text: str, restore_focus: bool = True) -> None:
         """Type text using clipboard paste.
         
         Uses the exact same method as the verified shell command:
         echo "text" | xclip -selection clipboard && xdotool key ctrl+v
+        
+        Preserves the user's original clipboard content by saving and restoring it.
         """
         if not text:
             return
         
         logger.info(f"Pasting: {text[:50]}...")
+        
+        # Save original clipboard content
+        original_clipboard = self._get_clipboard()
         
         # Restore focus first
         if restore_focus:
@@ -87,7 +117,16 @@ class InputSimulator:
             
         except Exception as e:
             logger.error(f"Paste failed: {e}")
+        finally:
+            # Restore original clipboard content
+            if original_clipboard is not None:
+                # Small delay to ensure paste completes before restoring
+                import time
+                time.sleep(0.1)
+                self._set_clipboard(original_clipboard)
+                logger.debug("Clipboard restored")
     
     async def type_text_async(self, text: str, restore_focus: bool = True) -> None:
         """Async wrapper - just calls sync version directly."""
         self.type_text(text, restore_focus)
+
